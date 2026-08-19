@@ -8,11 +8,6 @@
 
   // ---- Constants ----
   const API_BASE = 'https://queue-times.com/parks/31/queue_times.json';
-  // CORS proxies (the API doesn't send Access-Control-Allow-Origin)
-  const CORS_PROXIES = [
-    (url) => `https://corsproxy.org/?${encodeURIComponent(url)}`,
-    (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  ];
   const REFRESH_INTERVAL = 10_000; // 10 seconds
   const MAX_WAIT_BAR = 90; // minutes — anything above this is "full bar"
 
@@ -78,7 +73,7 @@
   // ---- Fetch Data ----
   async function fetchQueueTimes() {
     let lastError;
-    for (const proxy of CORS_PROXIES) {
+    for (const proxy of API_BASE) {
       try {
         const url = proxy(API_BASE);
         const res = await fetch(url);
