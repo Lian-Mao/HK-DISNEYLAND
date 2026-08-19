@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Theme Park Queue Buddy – Hong Kong Disneyland Wait Times</title>
+  <meta name="description"
+    content="Real-time attraction wait times for Hong Kong Disneyland. Check queue lengths before you go!" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=3" />
+</head>
+
+<body>
+  <!-- Animated background stars -->
+  <div id="bg-particles" aria-hidden="true"></div>
+
+  <header id="app-header">
+    <div class="header-inner">
+      <div class="logo-group">
+        <div class="logo-icon" aria-hidden="true">
+          <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Castle silhouette -->
+            <defs>
+              <linearGradient id="castleGrad" x1="0" y1="0" x2="52" y2="52">
+                <stop stop-color="#4688ff" />
+                <stop offset="0.5" stop-color="#a855f7" />
+                <stop offset="1" stop-color="#f0c040" />
+              </linearGradient>
+            </defs>
+            <!-- Main castle body -->
+            <rect x="12" y="24" width="28" height="20" rx="2" fill="url(#castleGrad)" opacity="0.85" />
+            <!-- Towers -->
+            <rect x="14" y="16" width="6" height="12" rx="1" fill="url(#castleGrad)" opacity="0.9" />
+            <rect x="32" y="16" width="6" height="12" rx="1" fill="url(#castleGrad)" opacity="0.9" />
+            <!-- Center spire -->
+            <rect x="23" y="10" width="6" height="18" rx="1" fill="url(#castleGrad)" />
+            <polygon points="26,2 22,10 30,10" fill="url(#castleGrad)" />
+            <!-- Side spires -->
+            <polygon points="17,10 14,16 20,16" fill="url(#castleGrad)" opacity="0.9" />
+            <polygon points="35,10 32,16 38,16" fill="url(#castleGrad)" opacity="0.9" />
+            <!-- Gate arch -->
+            <ellipse cx="26" cy="44" rx="5" ry="6" fill="rgba(10,14,39,0.7)" />
+            <!-- Windows -->
+            <circle cx="19" cy="30" r="1.5" fill="rgba(240,192,64,0.7)" />
+            <circle cx="33" cy="30" r="1.5" fill="rgba(240,192,64,0.7)" />
+            <circle cx="26" cy="22" r="1.5" fill="rgba(240,192,64,0.8)" />
+            <!-- Stars -->
+            <circle cx="8" cy="8" r="1" fill="#f0c040" opacity="0.8" />
+            <circle cx="44" cy="6" r="0.8" fill="#f0c040" opacity="0.6" />
+            <circle cx="46" cy="18" r="1" fill="#4688ff" opacity="0.5" />
+            <circle cx="4" cy="22" r="0.7" fill="#a855f7" opacity="0.6" />
+          </svg>
+        </div>
+        <div>
+          <h1>Queue Buddy</h1>
+          <p class="subtitle">✨ Hong Kong Disneyland &middot; Live Wait Times</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="filter-pills" id="filterPills">
+          <button class="pill active" data-filter="all">All</button>
+          <button class="pill" data-filter="open">Open</button>
+          <button class="pill" data-filter="closed">Closed</button>
+        </div>
+        <button id="refreshBtn" class="refresh-btn" title="Refresh now">
+          <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Stats banner -->
+    <section class="stats-banner" id="statsBanner">
+      <div class="stat-card" id="statOpen">
+        <span class="stat-value">—</span>
+        <span class="stat-label">Open</span>
+      </div>
+      <div class="stat-card" id="statClosed">
+        <span class="stat-value">—</span>
+        <span class="stat-label">Closed</span>
+      </div>
+      <div class="stat-card" id="statAvgWait">
+        <span class="stat-value">—</span>
+        <span class="stat-label">Avg Wait</span>
+      </div>
+      <div class="stat-card" id="statMaxWait">
+        <span class="stat-value">—</span>
+        <span class="stat-label">Longest</span>
+      </div>
+    </section>
+
+    <!-- Search -->
+    <div class="search-wrap">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+      <input type="text" id="searchInput" placeholder="Search attractions…" autocomplete="off" />
+    </div>
+
+    <!-- Sort -->
+    <div class="sort-wrap">
+      <label for="sortSelect">Sort by</label>
+      <select id="sortSelect">
+        <option value="wait-desc">Wait ↓</option>
+        <option value="wait-asc">Wait ↑</option>
+        <option value="status">Status</option>
+        <option value="name">Name (A-Z)</option>
+      </select>
+    </div>
+
+    <!-- Rides grid -->
+    <section class="rides-grid" id="ridesGrid">
+      <!-- cards injected by JS -->
+    </section>
+
+    <!-- Loading overlay -->
+    <div class="loader-overlay" id="loaderOverlay">
+      <div class="loader-spinner"></div>
+      <p>Fetching wait times&hellip;</p>
+    </div>
+
+    <!-- Error banner -->
+    <div class="error-banner hidden" id="errorBanner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+      <span id="errorMsg">Unable to fetch data.</span>
+    </div>
+
+    <!-- Last updated -->
+    <p class="last-updated" id="lastUpdated"></p>
+  </main>
+
+  <footer>
+    <p>Data from <a href="https://queue-times.com" target="_blank" rel="noopener">queue-times.com</a> &middot;
+      Auto-refreshes every 10 s</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
