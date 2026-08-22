@@ -6,75 +6,14 @@
 (() => {
   'use strict';
 
-// ---- Constants ----
-const TARGET_URL = 'https://queue-times.com/parks/31/queue_times.json';
-const PROXIES = [
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-];
-const REFRESH_INTERVAL = 10_000;
-const MAX_WAIT_BAR = 90;
-
-// ---- Fetch Data ----
-async function fetchQueueTimes() {
-  let lastError;
-  for (const proxy of PROXIES) {
-    try {
-      const url = proxy(TARGET_URL);
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      
-      // Normalize response (queue-times returns array or lands array)
-      if (Array.isArray(data.rides)) return data.rides;
-      if (Array.isArray(data.lands)) {
-        return data.lands.flatMap(land => land.rides || []);
-      }
-      return [];
-    } catch (err) {
-      lastError = err;
-    }
-  }
-  throw lastError;
-}
-
-// ---- Refresh ----
-async function refresh(manual = false) {
-  if (manual) {
-    refreshBtn.classList.add('spinning');
-    setTimeout(() => refreshBtn.classList.remove('spinning'), 700);
-  }
-
-  try {
-    const newRides = await fetchQueueTimes();
-
-    if (!isFirstLoad) {
-      rides.forEach(r => { previousWaitTimes[r.id] = r.wait_time; });
-    }
-
-    const firstLoadState = isFirstLoad;
-    rides = newRides;
-    isFirstLoad = false;
-
-    errorBanner.classList.add('hidden');
-    loaderOverlay.classList.add('hidden');
-
-    renderStats(rides);
-    renderRides(firstLoadState);
-
-    lastUpdatedEl.textContent = `Last refreshed: ${new Date().toLocaleTimeString('en-HK', {
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
-    })}`;
-
-  } catch (err) {
-    errorMsg.textContent = `Unable to fetch data: ${err.message}`;
-    errorBanner.classList.remove('hidden');
-    loaderOverlay.classList.add('hidden');
-  }
-
-  clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => refresh(false), REFRESH_INTERVAL);
-}
+  // ---- Constants ----
+  const TARGET_URL = 'https://queue-times.com/parks/31/queue_times.json';
+  const PROXIES = [
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+  ];
+  const REFRESH_INTERVAL = 10_000; // 10 seconds
+  const MAX_WAIT_BAR = 90; // minutes — anything above this is "full bar"
 
   // ---- DOM Refs ----
   const ridesGrid = document.getElementById('ridesGrid');
@@ -89,10 +28,10 @@ async function refresh(manual = false) {
   const lastUpdatedEl = document.getElementById('lastUpdated');
 
   // Stats
-  const statOpen = document.getElementById('statOpen').querySelector('.stat-value');
-  const statClosed = document.getElementById('statClosed').querySelector('.stat-value');
-  const statAvgWait = document.getElementById('statAvgWait').querySelector('.stat-value');
-  const statMaxWait = document.getElementById('statMaxWait').querySelector('.stat-value');
+  const statOpen = document.getElementById('statOpen')?.querySelector('.stat-value');
+  const statClosed = document.getElementById('statClosed')?.querySelector('.stat-value');
+  const statAvgWait = document.getElementById('statAvgWait')?.querySelector('.stat-value');
+  const statMaxWait = document.getElementById('statMaxWait')?.querySelector('.stat-value');
 
   // ---- State ----
   let rides = [];
@@ -104,6 +43,7 @@ async function refresh(manual = false) {
   // ---- Background Stars (Disney magic) ----
   function initParticles() {
     const container = document.getElementById('bg-particles');
+    if (!container) return;
     const count = 50;
     const starColors = [
       'rgba(212,160,32,0.35)',   // gold
@@ -138,18 +78,26 @@ async function refresh(manual = false) {
   // ---- Fetch Data ----
   async function fetchQueueTimes() {
     let lastError;
-    for (const proxy of API_BASE) {
+    for (const proxy of PROXIES) {
       try {
-        const url = proxy(API_BASE);
+        const url = proxy(TARGET_URL);
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        return data.rides || [];
+        
+        // Handle Queue-Times JSON schema (can be data.rides or nested in data.lands)
+        if (Array.isArray(data.rides)) {
+          return data.rides;
+        }
+        if (Array.isArray(data.lands)) {
+          return data.lands.flatMap(land => land.rides || []);
+        }
+        return [];
       } catch (err) {
         lastError = err;
       }
     }
-    throw lastError;
+    throw lastError || new Error('Failed to load queue data from proxies.');
   }
 
   // ---- Wait Level ----
@@ -161,6 +109,8 @@ async function refresh(manual = false) {
 
   // ---- Render Stats ----
   function renderStats(rideList) {
+    if (!statOpen || !statClosed || !statAvgWait || !statMaxWait) return;
+
     const open = rideList.filter(r => r.is_open);
     const closed = rideList.filter(r => !r.is_open);
     const waits = open.filter(r => r.wait_time > 0).map(r => r.wait_time);
@@ -194,7 +144,7 @@ async function refresh(manual = false) {
       ? Math.min((ride.wait_time / MAX_WAIT_BAR) * 100, 100)
       : 0;
 
-    const updatedDate = new Date(ride.last_updated);
+    const updatedDate = ride.last_updated ? new Date(ride.last_updated) : new Date();
     const timeStr = updatedDate.toLocaleTimeString('en-HK', {
       hour: '2-digit', minute: '2-digit', hour12: true,
     });
@@ -205,6 +155,7 @@ async function refresh(manual = false) {
     return `
       <article class="ride-card status-${ride.is_open ? 'open' : 'closed'}${changed ? ' flash' : ''}"
                data-ride-id="${ride.id}"
+               data-is-open="${ride.is_open}"
                style="animation-delay:0s">
         <div class="card-top">
           <span class="ride-name">${escapeHTML(ride.name)}</span>
@@ -248,11 +199,11 @@ async function refresh(manual = false) {
     else if (activeFilter === 'closed') list = list.filter(r => !r.is_open);
 
     // search
-    const q = searchInput.value.trim().toLowerCase();
+    const q = searchInput ? searchInput.value.trim().toLowerCase() : '';
     if (q) list = list.filter(r => r.name.toLowerCase().includes(q));
 
     // sort
-    const sortVal = sortSelect.value;
+    const sortVal = sortSelect ? sortSelect.value : 'name';
     list.sort((a, b) => {
       if (sortVal === 'name') return a.name.localeCompare(b.name);
       if (sortVal === 'wait-desc') return b.wait_time - a.wait_time;
@@ -265,7 +216,9 @@ async function refresh(manual = false) {
   }
 
   function renderRides(fullRebuild = false) {
+    if (!ridesGrid) return;
     const filtered = getFilteredRides();
+
     if (filtered.length === 0) {
       ridesGrid.innerHTML = '<p class="no-results">No attractions match your criteria.</p>';
       return;
@@ -287,7 +240,7 @@ async function refresh(manual = false) {
     existingCards.forEach(c => existingIds.add(c.dataset.rideId));
     const filteredIds = new Set(filtered.map(r => String(r.id)));
 
-    // If the set of visible rides changed (filter/search), do a full rebuild
+    // If set of visible rides changed, full rebuild
     if (existingIds.size !== filteredIds.size || ![...existingIds].every(id => filteredIds.has(id))) {
       ridesGrid.innerHTML = filtered.map(buildCard).join('');
       return;
@@ -297,6 +250,13 @@ async function refresh(manual = false) {
     filtered.forEach(ride => {
       const card = ridesGrid.querySelector(`[data-ride-id="${ride.id}"]`);
       if (!card) return;
+
+      // Rebuild card if open/closed status toggled
+      const wasOpen = card.dataset.isOpen === 'true';
+      if (wasOpen !== ride.is_open) {
+        card.outerHTML = buildCard(ride);
+        return;
+      }
 
       const level = waitLevel(ride.wait_time);
       const barWidth = ride.is_open ? Math.min((ride.wait_time / MAX_WAIT_BAR) * 100, 100) : 0;
@@ -328,13 +288,10 @@ async function refresh(manual = false) {
         badge.innerHTML = ride.is_open ? '● Open' : '○ Closed';
       }
 
-      // Update card status class
-      card.className = card.className.replace(/status-\w+/, `status-${ride.is_open ? 'open' : 'closed'}`);
-
       // Update footer time
       const footer = card.querySelector('.card-footer');
       if (footer) {
-        const updatedDate = new Date(ride.last_updated);
+        const updatedDate = ride.last_updated ? new Date(ride.last_updated) : new Date();
         footer.textContent = `Updated ${updatedDate.toLocaleTimeString('en-HK', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
       }
     });
@@ -342,7 +299,7 @@ async function refresh(manual = false) {
 
   // ---- Refresh ----
   async function refresh(manual = false) {
-    if (manual) {
+    if (manual && refreshBtn) {
       refreshBtn.classList.add('spinning');
       setTimeout(() => refreshBtn.classList.remove('spinning'), 700);
     }
@@ -355,24 +312,26 @@ async function refresh(manual = false) {
         rides.forEach(r => { previousWaitTimes[r.id] = r.wait_time; });
       }
 
+      const currentFirstLoad = isFirstLoad;
       rides = newRides;
       isFirstLoad = false;
 
-      errorBanner.classList.add('hidden');
-      loaderOverlay.classList.add('hidden');
+      if (errorBanner) errorBanner.classList.add('hidden');
+      if (loaderOverlay) loaderOverlay.classList.add('hidden');
 
       renderStats(rides);
-      renderRides(isFirstLoad);
+      renderRides(currentFirstLoad);
 
-      // Last updated
-      lastUpdatedEl.textContent = `Last refreshed: ${new Date().toLocaleTimeString('en-HK', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
-      })}`;
+      if (lastUpdatedEl) {
+        lastUpdatedEl.textContent = `Last refreshed: ${new Date().toLocaleTimeString('en-HK', {
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+        })}`;
+      }
 
     } catch (err) {
-      errorMsg.textContent = `Unable to fetch data: ${err.message}`;
-      errorBanner.classList.remove('hidden');
-      loaderOverlay.classList.add('hidden');
+      if (errorMsg) errorMsg.textContent = `Unable to fetch data: ${err.message}`;
+      if (errorBanner) errorBanner.classList.remove('hidden');
+      if (loaderOverlay) loaderOverlay.classList.add('hidden');
     }
 
     // Schedule next
@@ -381,19 +340,21 @@ async function refresh(manual = false) {
   }
 
   // ---- Event Listeners ----
-  refreshBtn.addEventListener('click', () => refresh(true));
+  if (refreshBtn) refreshBtn.addEventListener('click', () => refresh(true));
 
-  searchInput.addEventListener('input', () => renderRides(true));
-  sortSelect.addEventListener('change', () => renderRides(true));
+  if (searchInput) searchInput.addEventListener('input', () => renderRides(true));
+  if (sortSelect) sortSelect.addEventListener('change', () => renderRides(true));
 
-  filterPills.addEventListener('click', (e) => {
-    const btn = e.target.closest('.pill');
-    if (!btn) return;
-    filterPills.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    activeFilter = btn.dataset.filter;
-    renderRides(true);
-  });
+  if (filterPills) {
+    filterPills.addEventListener('click', (e) => {
+      const btn = e.target.closest('.pill');
+      if (!btn) return;
+      filterPills.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.filter;
+      renderRides(true);
+    });
+  }
 
   // ---- Init ----
   initParticles();
