@@ -6,10 +6,75 @@
 (() => {
   'use strict';
 
-  // ---- Constants ----
-  const API_BASE = 'https://queue-times.com/parks/31/queue_times.json';
-  const REFRESH_INTERVAL = 10_000; // 10 seconds
-  const MAX_WAIT_BAR = 90; // minutes — anything above this is "full bar"
+// ---- Constants ----
+const TARGET_URL = 'https://queue-times.com/parks/31/queue_times.json';
+const PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+];
+const REFRESH_INTERVAL = 10_000;
+const MAX_WAIT_BAR = 90;
+
+// ---- Fetch Data ----
+async function fetchQueueTimes() {
+  let lastError;
+  for (const proxy of PROXIES) {
+    try {
+      const url = proxy(TARGET_URL);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      
+      // Normalize response (queue-times returns array or lands array)
+      if (Array.isArray(data.rides)) return data.rides;
+      if (Array.isArray(data.lands)) {
+        return data.lands.flatMap(land => land.rides || []);
+      }
+      return [];
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
+// ---- Refresh ----
+async function refresh(manual = false) {
+  if (manual) {
+    refreshBtn.classList.add('spinning');
+    setTimeout(() => refreshBtn.classList.remove('spinning'), 700);
+  }
+
+  try {
+    const newRides = await fetchQueueTimes();
+
+    if (!isFirstLoad) {
+      rides.forEach(r => { previousWaitTimes[r.id] = r.wait_time; });
+    }
+
+    const firstLoadState = isFirstLoad;
+    rides = newRides;
+    isFirstLoad = false;
+
+    errorBanner.classList.add('hidden');
+    loaderOverlay.classList.add('hidden');
+
+    renderStats(rides);
+    renderRides(firstLoadState);
+
+    lastUpdatedEl.textContent = `Last refreshed: ${new Date().toLocaleTimeString('en-HK', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+    })}`;
+
+  } catch (err) {
+    errorMsg.textContent = `Unable to fetch data: ${err.message}`;
+    errorBanner.classList.remove('hidden');
+    loaderOverlay.classList.add('hidden');
+  }
+
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => refresh(false), REFRESH_INTERVAL);
+}
 
   // ---- DOM Refs ----
   const ridesGrid = document.getElementById('ridesGrid');
