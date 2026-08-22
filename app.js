@@ -72,25 +72,27 @@
   }
 
   // ---- Fetch Data (Simplified Public CORS Proxy) ----
-  async function fetchQueueTimes() {
-    const proxyUrls = [
-      `https://corsproxy.io/?${encodeURIComponent(TARGET_URL)}`,
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(TARGET_URL)}`
-    ];
+async function fetchQueueTimes() {
+  const nativeFetch = window.fetch.bind(window);
+  const proxyUrls = [
+    `https://corsproxy.io/?${encodeURIComponent(TARGET_URL)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(TARGET_URL)}`,
+    `https://thingproxy.freeboard.io/fetch/${TARGET_URL}`
+  ];
 
-    for (const url of proxyUrls) {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) continue;
-        const data = await res.json();
-        return data.rides || data.lands?.flatMap(land => land.rides || []) || [];
-      } catch {
-        // Silently try next proxy on network failure
-      }
+  for (const url of proxyUrls) {
+    try {
+      const res = await nativeFetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      return data.rides || data.lands?.flatMap(land => land.rides || []) || [];
+    } catch (err) {
+      console.warn(`Proxy failed for ${url}:`, err);
     }
-
-    throw new Error('All CORS proxies failed to load queue data.');
   }
+
+  throw new Error('All CORS proxies failed to load queue data.');
+}
 
   // ---- Wait Level ----
   function waitLevel(minutes) {
