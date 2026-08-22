@@ -1,6 +1,6 @@
 /* ==========================================================
    Theme Park Queue Buddy — Hong Kong Disneyland
-   Application Logic
+   Application Logic (GitHub Pages / Simplified Proxy Version)
    ========================================================== */
 
 (() => {
@@ -8,10 +8,6 @@
 
   // ---- Constants ----
   const TARGET_URL = 'https://queue-times.com/parks/31/queue_times.json';
-  const PROXIES = [
-    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-  ];
   const REFRESH_INTERVAL = 10_000; // 10 seconds
   const MAX_WAIT_BAR = 90; // minutes — anything above this is "full bar"
 
@@ -75,29 +71,25 @@
     }
   }
 
-  // ---- Fetch Data ----
+  // ---- Fetch Data (Simplified Public CORS Proxy) ----
   async function fetchQueueTimes() {
-    let lastError;
-    for (const proxy of PROXIES) {
+    const proxyUrls = [
+      `https://corsproxy.io/?${encodeURIComponent(TARGET_URL)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(TARGET_URL)}`
+    ];
+
+    for (const url of proxyUrls) {
       try {
-        const url = proxy(TARGET_URL);
         const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) continue;
         const data = await res.json();
-        
-        // Handle Queue-Times JSON schema (can be data.rides or nested in data.lands)
-        if (Array.isArray(data.rides)) {
-          return data.rides;
-        }
-        if (Array.isArray(data.lands)) {
-          return data.lands.flatMap(land => land.rides || []);
-        }
-        return [];
-      } catch (err) {
-        lastError = err;
+        return data.rides || data.lands?.flatMap(land => land.rides || []) || [];
+      } catch {
+        // Silently try next proxy on network failure
       }
     }
-    throw lastError || new Error('Failed to load queue data from proxies.');
+
+    throw new Error('All CORS proxies failed to load queue data.');
   }
 
   // ---- Wait Level ----
@@ -234,24 +226,22 @@
       return;
     }
 
-    // Subtle in-place update: patch existing cards
+    // In-place patch update
     const existingCards = ridesGrid.querySelectorAll('.ride-card');
     const existingIds = new Set();
     existingCards.forEach(c => existingIds.add(c.dataset.rideId));
     const filteredIds = new Set(filtered.map(r => String(r.id)));
 
-    // If set of visible rides changed, full rebuild
     if (existingIds.size !== filteredIds.size || ![...existingIds].every(id => filteredIds.has(id))) {
       ridesGrid.innerHTML = filtered.map(buildCard).join('');
       return;
     }
 
-    // Patch each card in place
     filtered.forEach(ride => {
       const card = ridesGrid.querySelector(`[data-ride-id="${ride.id}"]`);
       if (!card) return;
 
-      // Rebuild card if open/closed status toggled
+      // Full card rebuild if status toggles between open/closed
       const wasOpen = card.dataset.isOpen === 'true';
       if (wasOpen !== ride.is_open) {
         card.outerHTML = buildCard(ride);
@@ -307,7 +297,6 @@
     try {
       const newRides = await fetchQueueTimes();
 
-      // Save previous wait times for flash detection
       if (!isFirstLoad) {
         rides.forEach(r => { previousWaitTimes[r.id] = r.wait_time; });
       }
@@ -334,7 +323,6 @@
       if (loaderOverlay) loaderOverlay.classList.add('hidden');
     }
 
-    // Schedule next
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => refresh(false), REFRESH_INTERVAL);
   }
